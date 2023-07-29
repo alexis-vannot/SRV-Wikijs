@@ -1,0 +1,87 @@
+version: "3"
+
+services:
+
+  # ===================
+  # |  Wiki.js        |
+  # ===================
+  wikijs:
+    # ---- Build instructions ----
+    container_name: wikijs
+    image: linuxserver/wikijs:2.5.299
+    shm_size: 256m
+
+    # ---- Container information ----
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      - postgres-wikijs
+    env_file:
+      # ---------------------------------------------------------------------
+      # Some environment variables are managed in ./.secrets/wikijs.env     |
+      # DB_USER, DB_PASS, DB_NAME                                           |
+      # ---------------------------------------------------------------------
+      - ./.secrets/wikijs.env
+    environment:
+      DB_TYPE: postgres
+      DB_HOST: postgres-wikijs
+      DB_PORT: 5432
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=webgateway-traefik
+      - traefik.http.routers.wikijs-router.rule=Host(`www.alexis-vannot.dev`) || Host(`alexis-vannot.dev`)
+      - traefik.http.routers.wikijs-router.middlewares=non-www-to-www@docker
+      - traefik.http.routers.wikijs-router.entrypoints=websecure
+      - traefik.http.routers.wikijs-router.tls=true
+      - traefik.http.routers.wikijs-router.tls.certresolver=letsencrypt
+      - traefik.http.routers.wikijs-router.service=wikijs-service
+      - traefik.http.services.wikijs-service.loadbalancer.server.port=3000
+    volumes:
+      # Container configuration
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    networks:
+      - webgateway-wikijs
+      - webgateway-traefik
+
+  # ============================
+  # |    PostgreSQL            |
+  # ============================
+  postgres-wikijs:
+    # ---- Build instructions ----
+    container_name: postgres-wikijs
+    image: postgres:14
+    shm_size: 256m
+
+    # ---- Container information ----
+    tty: true
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgresql_root_password
+    volumes:
+      # Container configuration
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      # PostgreSQL data
+      - ./postgresql_data:/var/lib/postgresql/data
+    networks:
+      - webgateway-wikijs
+    secrets:
+      - postgresql_root_password
+
+# ========================
+# |  Networks            |
+# ========================
+networks:
+  webgateway-wikijs:
+    name: webgateway-wikijs
+
+  webgateway-traefik:
+    external: true
+
+# ========================
+# |  Secrets             |
+# ========================
+secrets:
+  postgresql_root_password:
+    file: ./.secrets/postgresql_root_password.txt
